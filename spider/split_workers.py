@@ -95,7 +95,7 @@ async def consumer(links, results, session, sem):
 async def main():
 
     # set up csv reader
-    infile = 'tiney_urls.csv'
+    infile = '.seed_urls.csv'
     reader = csv.reader(open(infile, 'r'))
 
     '''
@@ -148,8 +148,8 @@ async def main():
 
 
 
-    title_out_writer = csv.writer(open('title_out.csv', 'w+', newline=''))
-    url_out_writer = csv.writer(open('url_out.csv', 'w+', newline=''))
+    title_out_writer = csv.writer(open('.title_out.csv', 'w+', newline=''))
+    url_out_writer = csv.writer(open('.url_out.csv', 'w+', newline=''))
 
     # proccess the titles
     count_titles = results.qsize()
