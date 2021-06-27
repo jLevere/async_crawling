@@ -8,7 +8,7 @@ def line_count(infile):
     with open(infile) as f:
         for i, _ in enumerate(f):
             pass
-    return i
+    return i+1
 
 '''
     TODO:
@@ -164,7 +164,8 @@ async def main():
             print(f'titlewriter fail: {str(e)} for {entry}')
             title_out_writer.writerow([entry])
 
-    # print the urls remaining in the index queue.  this also shows their priority.
+    # dump the contents of the index queue at finish.  this also shows their priority.
+    # there will most likely still be items in it.
     index_count = index.qsize()
     for _ in range(index.qsize()):
         entry = index.get_nowait()
