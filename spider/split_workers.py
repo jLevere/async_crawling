@@ -1,5 +1,5 @@
 import asyncio, aiohttp, aiohttp_socks
-import csv, time, sys, re, traceback
+import csv, time, sys, re, traceback, json
 
 from bs4 import BeautifulSoup
 from bs4.element import SoupStrainer
@@ -20,7 +20,7 @@ def line_count(infile):
 async def producer(index, links, session, sem):
     seen_urls = []
 
-    for recur in range(5):
+    for recur in range(2):
         url = await index.get()
         url = url[1]
         
@@ -146,36 +146,28 @@ async def main():
         for task in consumers:
             task.cancel()
 
+    print('========= stats ==========')
+    print(f'seed urls: {line_count(infile)}')
+    print(f'titles seen: {results.qsize()}')
+    print(f'urls still in links queue: {links.qsize()}')
+    print(f'urls still in the index queue: {index.qsize()}')
+
+    # write the titles to file in json
+    with open('.title_out.json', 'w+', encoding='utf-8') as f:
+        for _ in range(results.qsize()):
+            entry = results.get_nowait()
+            json_object = json.dumps(entry, ensure_ascii=False)
+            f.write(json_object + '\n')
 
 
-    title_out_writer = csv.writer(open('.title_out.csv', 'w+', newline=''))
-    url_out_writer = csv.writer(open('.url_out.csv', 'w+', newline=''))
-
-    # proccess the titles
-    count_titles = results.qsize()
-
-    for _ in range(results.qsize()):
-        entry = results.get_nowait()
-        try:
-            title_out_writer.writerow([entry])
-        except Exception as e:
-            # if an exception in writing, encode the string and try to write again
-            entry['title'] = entry['title'].encode('utf-8')
-            print(f'titlewriter fail: {str(e)} for {entry}')
-            title_out_writer.writerow([entry])
 
     # dump the contents of the index queue at finish.  this also shows their priority.
     # there will most likely still be items in it.
-    index_count = index.qsize()
-    for _ in range(index.qsize()):
-        entry = index.get_nowait()
-        url_out_writer.writerow([entry])
-        
-    print('========= stats ==========')
-    print(f'seed urls: {line_count(infile)}')
-    print(f'titles seen: {count_titles}')
-    print(f'urls still in links queue: {links.qsize()}')
-    print(f'urls still in the index queue: {index_count}')
+    with open('.urls_out.json', 'w+', encoding='utf-8') as f:
+        for _ in range(index.qsize()):
+            entry = index.get_nowait()
+            json_object = json.dumps(entry, ensure_ascii=False)
+            f.write(json_object + '\n')
 
 
 if __name__ == "__main__":
