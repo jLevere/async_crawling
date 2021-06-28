@@ -1,5 +1,5 @@
-import asyncio, aiohttp, aiohttp_socks
-import csv, time, sys, re, traceback, json
+import asyncio, aiohttp, aiohttp_socks # async imports
+import csv, time, sys, re, traceback, json # utility imports
 
 from bs4 import BeautifulSoup
 from bs4.element import SoupStrainer
@@ -13,18 +13,17 @@ def line_count(infile):
 '''
     TODO:
         Needs better loggging and error handleing.  
-        Maybe a better file output format would be nice as well.  csv just is inflexable and unclear to read.
-        Transition away from using a queue for the results for simplity and preformance.
+        Transition away from using a queue for the results for cleaness and preformance.
 '''
 
 async def producer(index, links, session, sem):
     seen_urls = []
 
-    for recur in range(2):
-        url = await index.get()
-        url = url[1]
+    for recur in range(3):
+        url = (await index.get())[1] # [1] is to get the url not priorty from the queue
         
-        print(f'{asyncio.current_task()} get')
+        #print(f'{asyncio.current_task()} get') # debugging, shows general activity
+
         try:
             async with sem, session.get(url, timeout=10) as r:
                 text = await r.content.read(-1)
@@ -34,17 +33,16 @@ async def producer(index, links, session, sem):
                 link = tag.get('href')
 
                 if link and link[0:4] == 'http' and link not in seen_urls:
-
                     seen_urls.append(link)
                     # put into queue for the consumer
                     await links.put(link)
-                    # put back into producer queue to be checked on next run.  use the current recursion/loop number as priority to ensure good coverage
+                    # put back into producer queue to be checked on next run.  use the current recursion/loop number as priority to ensure predictable coverage
                     await index.put([recur, link])
 
     
         except Exception as e:
-            traceback.print_exc()
-            print(f'qsize: {links.qsize()} link runner error: ' + str(e))
+            #traceback.print_exc() # debugging
+            print(f'qsize: {links.qsize()} producer error: ' + e.__class__.__name__)
 
 
 
@@ -54,16 +52,18 @@ async def consumer(links, results, session, sem):
 
         url = await links.get()
 
-        if links.qsize() % 100 == 0:
-            print(f'current link queue: {links.qsize()}')
+        timeout = 14
 
-        response = {}
-        response['url'] = url
-        print(f'{asyncio.current_task()} get')
+        response = {
+            'url' : url,
+            'get timeout' : timeout
+        }
+
         try:
-            async with sem, session.get(url, timeout=7) as r:
+            async with sem, session.get(url, timeout=timeout) as r:
                 text = await r.content.read(-1)
                 status = r.status
+                redirects = len(r.history)
             
             soup = BeautifulSoup(text, 'lxml')
             if soup.title:
@@ -74,20 +74,21 @@ async def consumer(links, results, session, sem):
 
             response['status'] = status
             response['title'] = title
+            response['redirects'] = redirects
 
 
         except Exception as e:
-            
-            print(f'lqueue: {links.qsize()} rqueue: {results.qsize()} title runner err: {str(e)}')
+
+            print(f'link_queue: {links.qsize()} results_queue: {results.qsize()} consumer runner err: {e.__class__.__name__}')
 
             if len(str(e)) == 0:
-                traceback.print_exc()
                 response['error'] = e.__class__.__name__
             else:
                 response['error'] = str(e)
         
         finally:
             await results.put(response)
+            # this makes sure that the queue gets updated on compleation status
             links.task_done()
             
                 
@@ -137,11 +138,11 @@ async def main():
 
         await asyncio.gather(*producers)
         
-        print(f'producers are finished, qsize: {links.qsize()}')
+        #print(f'producers are finished, qsize: {links.qsize()}') # debugging
 
         await links.join()
 
-        print('consumers are joined')
+        #print('consumers are joined') # debugging
 
         for task in consumers:
             task.cancel()
@@ -153,21 +154,35 @@ async def main():
     print(f'urls still in the index queue: {index.qsize()}')
 
     # write the titles to file in json
+    errors = 0
+    redirs = 0
+    redir_avg = 0
     with open('.title_out.json', 'w+', encoding='utf-8') as f:
         for _ in range(results.qsize()):
             entry = results.get_nowait()
             json_object = json.dumps(entry, ensure_ascii=False)
             f.write(json_object + '\n')
 
-
+            if 'error' in entry:
+                errors += 1
+            if 'redirects' in entry and entry['redirects'] != 0:
+                redirs += 1
+                redir_avg = entry['redirects']
+    
+    if redirs != 0 and redir_avg != 0:
+        redir_avg = redir_avg / redirs
+    else:
+        redir_avg = -1
 
     # dump the contents of the index queue at finish.  this also shows their priority.
     # there will most likely still be items in it.
-    with open('.urls_out.json', 'w+', encoding='utf-8') as f:
+    with open('.urls_out.log', 'w+', encoding='utf-8') as f:
         for _ in range(index.qsize()):
-            entry = index.get_nowait()
-            json_object = json.dumps(entry, ensure_ascii=False)
-            f.write(json_object + '\n')
+            f.write(str(index.get_nowait()) + '\n')
+
+    # more stats
+    print(f'errors getting titles: {errors}')
+    print(f'average redirects: {redir_avg}')
 
 
 if __name__ == "__main__":
@@ -178,7 +193,7 @@ if __name__ == "__main__":
     start_time = time.time()
 
     try:
-        asyncio.run(main(), debug=True)
+        asyncio.run(main())
     except KeyboardInterrupt:
         traceback.print_exc()
         print('keyboard interupt was used')
