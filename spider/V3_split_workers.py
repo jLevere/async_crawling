@@ -13,6 +13,8 @@ def line_count(infile):
 '''
     Uses a producer consumer structure to recursivly extract links and titles from webpages.
 
+    This version is usable but could use improvements in error handling and small preformance alterations.
+
     OUTPUT is in json format
 
     TODO:
