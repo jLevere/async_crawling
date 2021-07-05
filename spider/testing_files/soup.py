@@ -3,6 +3,10 @@ from bs4.element import SoupStrainer
 import requests
 from urllib.parse import urlsplit, urljoin
 
+'''
+    extracts things from webpages using beutiful soup and soupstrainers.
+'''
+
 
 
 def parse_links(text):
