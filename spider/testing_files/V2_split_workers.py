@@ -13,10 +13,11 @@ def line_count(infile):
 '''
     Uses a producer consumer structure to recursivly extract links and titles from webpages.
 
+    OUTPUT is in json format
+
     TODO:
         Needs better loggging and error handleing.  
         Transition away from using a queue for the results for cleaness and preformance.
-        The path it takes is somewhat unpredicable as well.
 '''
 
 async def producer(index, links, session, sem):
