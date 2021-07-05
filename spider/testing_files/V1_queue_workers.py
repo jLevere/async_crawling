@@ -6,6 +6,8 @@ from bs4 import BeautifulSoup
 from bs4.element import SoupStrainer
 
 '''
+    The first of a series of functional spiders.
+
 Structure:
             runner   _  # gets the pages and passes to proccessors
                |     |

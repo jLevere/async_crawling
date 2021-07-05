@@ -9,6 +9,10 @@ import random
 from aiohttp_socks import ProxyConnector
 from bs4 import BeautifulSoup
 
+'''
+    Demonstrates using queues with asyncio
+'''
+
 
 async def runner(name, queue):
     while True:

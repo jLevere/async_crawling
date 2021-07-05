@@ -3,6 +3,11 @@ import re, csv, time, sys
 
 from bs4 import BeautifulSoup
 
+'''
+    using async queues to hold the results of async functions
+'''
+
+
 def line_count(infile):
     with open(infile) as f:
         for i, l in enumerate(f):
