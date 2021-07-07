@@ -8,6 +8,7 @@ import csv
 import re
 import aiohttp
 import time
+import traceback
 
 from aiohttp_socks.connector import ProxyConnector
 from bs4 import BeautifulSoup
@@ -17,7 +18,7 @@ from datetime import datetime
 def loadurls():
     urls = []
 
-    f = csv.reader(open('small_urls.csv', 'r'), delimiter=',') 
+    f = csv.reader(open('.small_urls.csv', 'r'), delimiter=',') 
     for line in f:
         urls.append(line[0])
 
@@ -27,12 +28,12 @@ async def runner(url, session, sem):
 
     response = {}
     response['url'] = url
+    response['datetime'] = (datetime.now()).strftime("%m/%d/%Y %H:%M:%S")
     
     timeout = 7
     retries = 2
     
     for attempt in range(retries):
-        attempt += 1
         try:
             async with sem, session.get(url.strip(), timeout=timeout) as r:
                 text = await r.content.read(-1)
@@ -41,12 +42,11 @@ async def runner(url, session, sem):
             soup = BeautifulSoup(text, 'lxml')
             
             if soup.title:
-                response['title'] = re.sub(r'\W+', ' ', soup.title)
+                response['title'] = re.sub(r'\W+', ' ', soup.title.string)
             else:
                 response['title'] = "no title"
             
             response['status'] = str(status)
-            response['datetime'] = (datetime.now()).strftime("%m/%d/%Y %H:%M:%S")
 
             if attempt != 0:
                 response['retry'] = f'attempt: {attempt} timeout: {timeout}'
@@ -57,12 +57,18 @@ async def runner(url, session, sem):
             if isinstance(e, asyncio.TimeoutError) and attempt < retries -1:
                 
                 timeout = timeout + 10
+            elif isinstance(e, asyncio.TimeoutError) and attempt == retries -1:
+                response['error'] = e.__class__.__name__
+                response['title'] = 'Timeout'
+                response['status'] = '-1'
+
+                return response
+
             else:
                 response['error'] = e.__class__.__name__
                 response['title'] = "N/A"
                 response['status'] = '-1'
-                response['datetime'] = (datetime.now()).strftime("%m/%d/%Y %H:%M:%S")
-
+                
                 return response
         
             
@@ -77,6 +83,7 @@ async def main():
         "user-agent" : "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0"
     }
 
+    results = []
     async with aiohttp.ClientSession(connector=proxy, headers=headers) as session:
         tasks = []
         for url in urls:
@@ -86,27 +93,27 @@ async def main():
         results = await asyncio.gather(*tasks)
 
         # stats gathering setup
-        errors = 0
-        retries = 0
-        count = 0
+    errors = 0
+    retries = 0
+    count = 0
 
-        f = csv.writer(open('output.csv', 'w+', newline='', encoding='utf-8'))
-        for result in results:
-            count += 1
+    f = csv.writer(open('.output.csv', 'w+', newline='', encoding='utf-8'))
+    for result in results:
+        count += 1
+        
+        f.writerow([result['url'], result['status'], result['datetime'], result['title']])
 
-            f.writerow([result['url'], result['status'], result['datetime'], result['title']])
-
-            if 'error' in result:
-                errors = errors +1
-            if 'retries' in result:
-                retries = retries +1
+        if 'error' in result:
+            errors = errors +1
+        if 'retries' in result:
+            retries = retries +1
     
-        # display stats
-        print(f'-------- stats ----------')
-        print(f'starting urls: {total_urls}')
-        print(f'titles found: {count}')
-        print(f'errors seen: {errors}')
-        print(f'retries used: {retries}')
+    # display stats
+    print(f'-------- stats ----------')
+    print(f'starting urls: {total_urls}')
+    print(f'titles found: {count}')
+    print(f'errors seen: {errors}')
+    print(f'retries used: {retries}')
 
 if __name__ == "__main__":
     start_time = time.time()
