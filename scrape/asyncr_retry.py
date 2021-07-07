@@ -8,7 +8,6 @@ import csv
 import re
 import aiohttp
 import time
-import traceback
 
 from aiohttp_socks.connector import ProxyConnector
 from bs4 import BeautifulSoup
@@ -59,7 +58,7 @@ async def runner(url, session, sem):
                 timeout = timeout + 10
             elif isinstance(e, asyncio.TimeoutError) and attempt == retries -1:
                 response['error'] = e.__class__.__name__
-                response['title'] = 'Timeout'
+                response['title'] = 'client timeout'
                 response['status'] = '-1'
 
                 return response
